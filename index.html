@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>수출이 — 퍼시스그룹 수출 챗봇</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+      background: #f0f2f5;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1a56a0;
+      color: #fff;
+      padding: 0 16px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(0,0,0,.2);
+    }
+    header h1 { font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+    header h1 span { margin-right: 6px; }
+    #help-btn {
+      background: rgba(255,255,255,.2);
+      border: none;
+      color: #fff;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    #help-btn:hover { background: rgba(255,255,255,.35); }
+
+    /* ── Messages ── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .msg-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .msg-row.user  { flex-direction: row-reverse; }
+    .msg-row.bot   { flex-direction: row; }
+
+    .avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: #1a56a0;
+      color: #fff;
+      font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .bubble {
+      max-width: min(72%, 640px);
+      padding: 10px 14px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .msg-row.user .bubble {
+      background: #1a56a0;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg-row.bot .bubble {
+      background: #fff;
+      color: #222;
+      border: 1px solid #e0e4ea;
+      border-bottom-left-radius: 4px;
+    }
+
+    /* markdown tables */
+    .bubble table {
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 13px;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+    }
+    .bubble th, .bubble td {
+      border: 1px solid #d0d5dd;
+      padding: 6px 10px;
+      white-space: nowrap;
+    }
+    .bubble th { background: #eaf0fb; font-weight: 600; }
+    .bubble tr:nth-child(even) td { background: #f8f9fb; }
+
+    /* bold / italic / code */
+    .bubble strong { font-weight: 700; }
+    .bubble em     { font-style: italic; }
+    .bubble code   { background: #f0f2f5; padding: 1px 4px; border-radius: 3px; font-size: .9em; }
+    .bubble pre    { background: #f0f2f5; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+    .bubble pre code { background: none; padding: 0; }
+    .bubble ul, .bubble ol { padding-left: 20px; margin: 4px 0; }
+
+    /* Loading dots */
+    .dots { display: flex; gap: 4px; padding: 4px 0; }
+    .dots span {
+      width: 7px; height: 7px;
+      background: #9aa3af;
+      border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: .2s; }
+    .dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40%           { transform: translateY(-6px); }
+    }
+
+    /* ── Input bar ── */
+    #input-bar {
+      background: #fff;
+      border-top: 1px solid #d8dde5;
+      padding: 10px 16px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      flex-shrink: 0;
+    }
+    #input {
+      flex: 1;
+      resize: none;
+      border: 1px solid #c8cdd6;
+      border-radius: 22px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      max-height: 140px;
+      overflow-y: auto;
+      line-height: 1.5;
+      transition: border-color .15s;
+    }
+    #input:focus { border-color: #1a56a0; }
+    #send-btn {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      background: #1a56a0;
+      border: none;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: background .15s, opacity .15s;
+    }
+    #send-btn:disabled { opacity: .45; cursor: default; }
+    #send-btn:not(:disabled):hover { background: #154485; }
+
+    /* ── Help modal ── */
+    #modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #modal-overlay.open { display: flex; }
+    #modal {
+      background: #fff;
+      border-radius: 14px;
+      padding: 24px;
+      max-width: 420px;
+      width: calc(100% - 32px);
+      box-shadow: 0 8px 30px rgba(0,0,0,.2);
+    }
+    #modal h2 { font-size: 17px; margin-bottom: 12px; }
+    #modal p, #modal li { font-size: 13px; line-height: 1.7; color: #444; }
+    #modal ul { padding-left: 18px; margin: 8px 0; }
+    #modal-close {
+      margin-top: 16px;
+      background: #1a56a0;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 20px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1><span>🚢</span>수출이</h1>
+  <button id="help-btn" title="도움말">?</button>
+</header>
+
+<div id="messages"></div>
+
+<div id="input-bar">
+  <textarea id="input" rows="1" placeholder="질문을 입력하세요…"></textarea>
+  <button id="send-btn" title="전송">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13"></line>
+      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+    </svg>
+  </button>
+</div>
+
+<!-- Help modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>🚢 수출이 도움말</h2>
+    <p>퍼시스그룹 글로벌사업지원팀 수출 서류 파트 전문 챗봇입니다.</p>
+    <ul>
+      <li>관세 조회 — "한국→미국 의자(9401.30) 관세?"</li>
+      <li>FTA 비교 — "한국 vs 베트남에서 수출 시 어디가 유리?"</li>
+      <li>HS CODE — "회전의자 HS CODE가 뭐야?"</li>
+      <li>소재 정보 — "단품코드 AB1234 알루미늄 무게?"</li>
+      <li>수출 실무 — "외화입금 프로세스 알려줘"</li>
+    </ul>
+    <p style="margin-top:10px;color:#888;font-size:12px;">
+      Enter 키로 전송 · Shift+Enter 줄바꿈
+    </p>
+    <button id="modal-close">닫기</button>
+  </div>
+</div>
+
+<script>
+  // ──────────────────────────────────────────
+  // 설정: 배포 후 실제 Worker URL로 교체하세요
+  const WORKER_URL = "https://export-faq-chatbot.yunju-kim.workers.dev";
+  // ──────────────────────────────────────────
+
+  const WELCOME = "안녕하세요! 저는 수출이입니다. 관세, HS CODE, 소재 정보, 수출 실무 궁금한 것을 물어보세요.";
+
+  const messagesEl = document.getElementById("messages");
+  const inputEl    = document.getElementById("input");
+  const sendBtn    = document.getElementById("send-btn");
+  const helpBtn    = document.getElementById("help-btn");
+  const overlay    = document.getElementById("modal-overlay");
+  const closeBtn   = document.getElementById("modal-close");
+
+  // Conversation history in Gemini format
+  let history = [];
+
+  // ── Markdown → HTML ──────────────────────
+  function mdToHtml(text) {
+    // Escape HTML first (except in code blocks)
+    const codeBlocks = [];
+    text = text.replace(/```[\s\S]*?```/g, (m) => {
+      codeBlocks.push(m);
+      return `\x00CODE${codeBlocks.length - 1}\x00`;
+    });
+
+    // Tables
+    text = text.replace(/(\|[^\n]+\|\n)((?:\|[-: ]+)+\|\n)((?:\|[^\n]+\|\n?)+)/g, (_, head, sep, body) => {
+      const parseRow = (row) => row.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+      const headers = parseRow(head);
+      const rows    = body.trim().split("\n").map(parseRow);
+      const th = headers.map(h => `<th>${h}</th>`).join("");
+      const trs = rows.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("");
+      return `<table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
+    });
+
+    // Bold / italic / inline code
+    text = text
+      .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>");
+
+    // Headings
+    text = text.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+    text = text.replace(/^## (.+)$/gm,  "<h2>$1</h2>");
+    text = text.replace(/^# (.+)$/gm,   "<h1>$1</h1>");
+
+    // Lists
+    text = text.replace(/^- (.+)$/gm, "<li>$1</li>");
+    text = text.replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`);
+    text = text.replace(/^\d+\. (.+)$/gm, "<li>$1</li>");
+
+    // Line breaks → <br> (skip inside block elements)
+    text = text.replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>");
+    text = `<p>${text}</p>`;
+
+    // Restore code blocks
+    text = text.replace(/\x00CODE(\d+)\x00/g, (_, i) => {
+      const block = codeBlocks[parseInt(i)];
+      const inner = block.replace(/^```[^\n]*\n?/, "").replace(/```$/, "");
+      return `<pre><code>${escHtml(inner)}</code></pre>`;
+    });
+
+    return text;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  // ── DOM helpers ──────────────────────────
+  function appendMessage(role, htmlOrDots) {
+    const row = document.createElement("div");
+    row.className = `msg-row ${role === "user" ? "user" : "bot"}`;
+
+    if (role !== "user") {
+      const av = document.createElement("div");
+      av.className = "avatar";
+      av.textContent = "🚢";
+      row.appendChild(av);
+    }
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+
+    if (htmlOrDots === "dots") {
+      bubble.innerHTML = `<div class="dots"><span></span><span></span><span></span></div>`;
+    } else {
+      bubble.innerHTML = htmlOrDots;
+    }
+
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return bubble;
+  }
+
+  // ── Send message ─────────────────────────
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text || sendBtn.disabled) return;
+
+    inputEl.value = "";
+    autoResize();
+
+    appendMessage("user", escHtml(text));
+
+    sendBtn.disabled = true;
+    const loadingBubble = appendMessage("bot", "dots");
+
+    // Append user turn to history BEFORE the request
+    // (we push it optimistically; roll back on error)
+    const userTurn = { role: "user", parts: [{ text }] };
+
+    try {
+      const res = await fetch(`${WORKER_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, history }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `서버 오류 (${res.status})`);
+      }
+
+      // Update history
+      history.push(userTurn);
+      history.push({ role: "model", parts: [{ text: data.reply }] });
+
+      loadingBubble.innerHTML = mdToHtml(data.reply);
+    } catch (err) {
+      loadingBubble.innerHTML = `<span style="color:#c0392b;">오류: ${escHtml(err.message)}</span>`;
+    } finally {
+      sendBtn.disabled = false;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      inputEl.focus();
+    }
+  }
+
+  // ── Auto-resize textarea ─────────────────
+  function autoResize() {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + "px";
+  }
+
+  // ── Event listeners ──────────────────────
+  inputEl.addEventListener("input", autoResize);
+
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  sendBtn.addEventListener("click", sendMessage);
+
+  helpBtn.addEventListener("click", () => overlay.classList.add("open"));
+  closeBtn.addEventListener("click", () => overlay.classList.remove("open"));
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.classList.remove("open");
+  });
+
+  // ── Welcome message ──────────────────────
+  appendMessage("bot", escHtml(WELCOME));
+</script>
+</body>
+</html>
